@@ -27,7 +27,7 @@
 //#define USE_FAKE_DATA
 //#define DEBUG
 #define _BUFFSIZE 64
-#define _S4_PORT_SPEED 19200
+#define _S4_PORT_SPEED 115200
 
 #define SerialDebug Serial1                // Need to fix this as it is not working
       
@@ -50,10 +50,7 @@ uint8_t ACMAsyncOper::OnInit(ACM *pacm){
 
   if (rcode){
     ErrorMessage<uint8_t>(PSTR("SetControlLineState"), rcode);
-    return rcode;
-
-
-    
+    return rcode;  
   }
 
   LINE_CODING	lc;
@@ -240,10 +237,10 @@ void initBLE(){
   ble.setAdvData( advdata, sizeof(advdata) );
   
   /* Reset the device for the new service setting changes to take effect */
-  Serial.print(F("Performing a SW reset (service changes require a reset): "));
+  SerialDebug.print(F("Performing a SW reset (service changes require a reset): "));
   ble.reset();
 
-  Serial.println();
+  SerialDebug.println();
 }
 
 void initFakeBleData(){
@@ -460,12 +457,12 @@ struct s4MemoryMap s4mmap[S4SIZE];
 
 void setup(){
   
-  Serial1.begin(19200);
-  Serial1.println("*");
-  Serial1.println("Starting");
-  Serial1.println("WaterRower S4 BLE Module v0.12");
-  Serial1.println("Vincent Besson");
-  Serial1.println("CR 2020");
+  SerialDebug.begin(19200);
+  SerialDebug.println("*");
+  SerialDebug.println("Starting");
+  SerialDebug.println("WaterRower S4 BLE Module v0.12");
+  SerialDebug.println("Vincent Besson");
+  SerialDebug.println("CR 2020");
 
   
 
@@ -518,9 +515,9 @@ void setup(){
     s4mmap[7].base=10;
   
   if (UsbH.Init())
-    Serial1.println("USB host failed to initialize");
+    SerialDebug.println("USB host failed to initialize");
   
-  Serial1.println("USB Host init OK"); 
+  SerialDebug.println("USB Host init OK"); 
   initBLE();
   
 #ifdef USE_FAKE_DATA
@@ -546,12 +543,12 @@ void writeCdcAcm(char str[]){
     if (ll > 0) {
       /* sending to USB CDC ACM */
 #ifdef DEBUG
-      Serial1.print("<");
+      SerialDebug.print("<");
 #endif
       for (int i=0;i<ll;i++){
         c=buf[i];
 #ifdef DEBUG
-        Serial1.write(c);
+        SerialDebug.write(c);
 #endif
         delay(25);          // By the S4 Spec Wait 25msec between each char sent
         rcode = AcmSerial.SndData(1, &c);
@@ -560,7 +557,7 @@ void writeCdcAcm(char str[]){
       } 
     }  
   }else{
-    Serial1.print("ACM NRS\n");
+    SerialDebug.print("ACM NRS\n");
   }
 }
 
@@ -586,10 +583,10 @@ void readCdcAcm(){
         buf[rcvd]='\0';
 
 #ifdef DEBUG
-        Serial1.print(">");
-        Serial1.print(rcvd);
-        Serial1.print(",");
-        Serial1.print(buf);
+        SerialDebug.print(">");
+        SerialDebug.print(rcvd);
+        SerialDebug.print(",");
+        SerialDebug.print(buf);
 #endif
         parseS4ReceivedData(buf,rcvd);
       }
@@ -599,13 +596,13 @@ void readCdcAcm(){
     
    //   if (totalRcvd>128){ // This is important cause PXX Message are Priorty and we need IRD Message
   //#ifdef DEBUG
-  //       Serial1.println("Break!");
+  //       SerialDebug.println("Break!");
   //#endif
   //      break;
     //  }
     //} 
   }else{
-    Serial1.print("ACM NRR\n");
+    SerialDebug.print("ACM NRR\n");
   }
 }
 
@@ -616,12 +613,12 @@ void parseS4ReceivedData(char data[],int len){
         data[len-2]='\0';
       }else{
 #ifdef DEBUG
-        Serial1.println("");
+        SerialDebug.println("");
 #endif
       }
       decodeS4Message(data);
    }else{
-      Serial1.println("Inv msg");
+      SerialDebug.println("Inv msg");
    }
 }
 
@@ -636,9 +633,9 @@ int asciiHexToInt(char hex[],int base){
 void decodeS4Message(char cmd[]){
 
 #ifdef DEBUG
-  Serial1.print("=");
-  Serial1.print(cmd);
-  Serial1.print("\n");
+  SerialDebug.print("=");
+  SerialDebug.print(cmd);
+  SerialDebug.print("\n");
 #endif  
   switch (cmd[0]){
     case '_':
@@ -655,7 +652,7 @@ void decodeS4Message(char cmd[]){
 
       if (cmd[1]=='V'){
         if (!strcmp(cmd,"IV40210")){ // 
-          Serial1.println("S4 Good Firmware Version");
+          SerialDebug.println("S4 Good Firmware Version");
         }
         writeCdcAcm((char*)"RESET");         // You should here a Bip on the WaterRower
         readCdcAcm();
@@ -668,11 +665,11 @@ void decodeS4Message(char cmd[]){
           if (!strncmp(cmd+3,s4mmap[i].addr,3)){
             *s4mmap[i].kpi=asciiHexToInt(cmd+6,s4mmap[i].base);
 //#ifdef DEBUG
-            Serial1.print(s4mmap[i].desc);
-            Serial1.print(",");
-            Serial1.print(s4mmap[i].addr);
-            Serial1.print("=");
-            Serial1.println(*s4mmap[i].kpi);
+            SerialDebug.print(s4mmap[i].desc);
+            SerialDebug.print(",");
+            SerialDebug.print(s4mmap[i].addr);
+            SerialDebug.print("=");
+            SerialDebug.println(*s4mmap[i].kpi);
 //ê#endif            
             break;  
           }
@@ -730,7 +727,7 @@ if ((currentTime-previousTime)>REFRESH_DATA_TIME){
 
   if (ble.isConnected() && s4InitFlag==true  ){ // Start Sending BLE Data only when BLE is connected and when S4 is fully initialized
     if (bleConnectionStatus==false)
-      Serial1.println("BLE:Connected");   
+      SerialDebug.println("BLE:Connected");   
     bleConnectionStatus=true;
     
 #ifdef USE_FAKE_DATA
@@ -742,7 +739,7 @@ if ((currentTime-previousTime)>REFRESH_DATA_TIME){
 
   }else{
     if (bleConnectionStatus==true)
-      Serial1.println("BLE:Disconnected");
+      SerialDebug.println("BLE:Disconnected");
     bleConnectionStatus=false;
   }
 }
@@ -750,7 +747,7 @@ if ((currentTime-previousTime)>REFRESH_DATA_TIME){
   if (!AcmSerial.isReady()){
     usbCounterCycle++;
     if (usbCounterCycle>5){         // Need 5 Cycle of USB.task to init the USB
-      Serial1.println("USB Serial is not ready sleep for 10sec");
+      SerialDebug.println("USB Serial is not ready sleep for 10sec");
       delay(10000);
       usbCounterCycle=0;
     }
