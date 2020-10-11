@@ -23,11 +23,11 @@
 // Global Define 
 
 #define BLE_SERVICE_NAME "WR S4BL3"
-#define REFRESH_DATA_TIME 100
+#define REFRESH_DATA_TIME 200
 //#define USE_FAKE_DATA
 //#define DEBUG
 #define _BUFFSIZE 64
-#define _S4_PORT_SPEED 115200
+#define _S4_PORT_SPEED 57600
 
 #define SerialDebug Serial1                // Need to fix this as it is not working
       
@@ -232,12 +232,12 @@ void initBLE(){
     error(F("Could not add Fitness Machine Rower Data characteristic"));
   }
 
-  SerialDebug.print(F("Adding Fitness Machine Service UUID to the advertising payload:: "));
+  SerialDebug.println(F("Adding Fitness Machine Service UUID to the advertising payload:: "));
   uint8_t advdata[] { 0x02, 0x01, 0x06, 0x05, 0x02, 0x26, 0x18, 0x0a, 0x18 };
   ble.setAdvData( advdata, sizeof(advdata) );
   
   /* Reset the device for the new service setting changes to take effect */
-  SerialDebug.print(F("Performing a SW reset (service changes require a reset): "));
+  SerialDebug.println(F("Performing a SW reset (service changes require a reset): "));
   ble.reset();
 
   SerialDebug.println();
@@ -373,7 +373,7 @@ void sendBleData(){
   // Send the P1 part of the Message
   cRower[0]=rowerDataFlagsP1 & 0x000000FF;
   cRower[1]=(rowerDataFlagsP1 & 0x0000FF00) >> 8;
-         
+  rdKpi.strokeRate=rdKpi.strokeRate*2;
   cRower[2] = rdKpi.strokeRate & 0x000000FF;
   
   cRower[3] = rdKpi.strokeCount & 0x000000FF;
@@ -542,20 +542,28 @@ void writeCdcAcm(char str[]){
 
     if (ll > 0) {
       /* sending to USB CDC ACM */
-#ifdef DEBUG
+//#ifdef DEBUG
       SerialDebug.print("<");
-#endif
+      SerialDebug.print(buf);
+//#endif
+//delay(25);
+//rcode = AcmSerial.SndData(ll,(uint8_t*) buf);
+//delay(25);
+
+//delay(75);
       for (int i=0;i<ll;i++){
         c=buf[i];
-#ifdef DEBUG
+//#ifdef DEBUG
         SerialDebug.write(c);
-#endif
-        delay(25);          // By the S4 Spec Wait 25msec between each char sent
+//#endif
+        delay(10);          // By the S4 Spec Wait 25msec between each char sent
         rcode = AcmSerial.SndData(1, &c);
         if (rcode)
-          ErrorMessage<uint8_t>(PSTR("SndData"), rcode); 
-      } 
-    }  
+          ErrorMessage<uint8_t>(PSTR("SndData"), rcode);
+        //delay(25);
+     } 
+    }
+    //readCdcAcm();  
   }else{
     SerialDebug.print("ACM NRS\n");
   }
@@ -574,7 +582,7 @@ void readCdcAcm(){
     char buf[64];    
     uint16_t rcvd = sizeof(buf);
 
-    int totalRcvd=0;
+    //int totalRcvd=0;
     rcode = AcmSerial.RcvData(&rcvd, (uint8_t *)buf);
     //while (rcvd>0 && totalRcvd<128){
     //  totalRcvd+=rcvd;
@@ -608,7 +616,9 @@ void readCdcAcm(){
 
 void parseS4ReceivedData(char data[],int len){
 
+  SerialDebug.println(data);
   if (len>2){
+
       if (data[len-1]=='\n' && data[len-2]=='\r'){
         data[len-2]='\0';
       }else{
@@ -617,7 +627,7 @@ void parseS4ReceivedData(char data[],int len){
 #endif
       }
       decodeS4Message(data);
-   }else{
+  }else{
       SerialDebug.println("Inv msg");
    }
 }
@@ -691,64 +701,69 @@ void decodeS4Message(char cmd[]){
 
 unsigned long currentTime=0;
 unsigned long previousTime=0;
+unsigned long pCycleTime=0;
 
 void loop(){
   
- 
-  currentTime=millis();
 
+  currentTime=millis();
+  readCdcAcm();
   UsbH.Task();
   
   if (s4InitFlag==false && AcmSerial.isReady() ){
-    delay(100);
     if (s4SendUsb==false){
       writeCdcAcm((char*)"USB");
       s4SendUsb=true;
     }
-    readCdcAcm();
-  }
-
-  readCdcAcm();     // No Matter What we read the port
-if ((currentTime-previousTime)>REFRESH_DATA_TIME){
-  previousTime=currentTime;
-  if ( s4InitFlag==true && bleConnectionStatus==true ){ // Get S4 Data Only if BLE is Connected
-
-    char cmd[7];
-    for (int i=0;i<S4SIZE;i++){
-      sprintf(cmd,"IR%s%s",s4mmap[i].msize,s4mmap[i].addr);
-      writeCdcAcm(cmd);
-      readCdcAcm();
-      delay(10);
-    }  
-  }
-  
-  // Send BLE Data 
-
-
-  if (ble.isConnected() && s4InitFlag==true  ){ // Start Sending BLE Data only when BLE is connected and when S4 is fully initialized
-    if (bleConnectionStatus==false)
-      SerialDebug.println("BLE:Connected");   
-    bleConnectionStatus=true;
-    
-#ifdef USE_FAKE_DATA
-    sendFakeBleDataP1();
-    sendFakeBleDataP2();
-#else
-      sendBleData();
-#endif
-
+    //readCdcAcm();
   }else{
-    if (bleConnectionStatus==true)
-      SerialDebug.println("BLE:Disconnected");
-    bleConnectionStatus=false;
+    //if ((currentTime-pCycleTime)>REFRESH_DATA_TIME){
+      //pCycleTime=currentTime;
+           // No Matter What we read the port
+    //}
+    if ((currentTime-previousTime)>REFRESH_DATA_TIME){
+      previousTime=currentTime;
+      if ( s4InitFlag==true && bleConnectionStatus==true ){ // Get S4 Data Only if BLE is Connected
+
+        char cmd[7];
+        //for (int i=0;i<4;i++){
+          sprintf(cmd,"IR%s%s",s4mmap[s4KpiTurn].msize,s4mmap[s4KpiTurn].addr);
+          writeCdcAcm(cmd);
+          //delay(25);
+          //readCdcAcm();
+        //} 
+        s4KpiTurn++;
+        if (s4KpiTurn==4)
+        s4KpiTurn=0; 
+      }
+      
+      // Send BLE Data 
+
+      if (ble.isConnected() && s4InitFlag==true  ){ // Start Sending BLE Data only when BLE is connected and when S4 is fully initialized
+        if (bleConnectionStatus==false)
+          SerialDebug.println("BLE:Connected");   
+        bleConnectionStatus=true;
+        
+    #ifdef USE_FAKE_DATA
+        sendFakeBleDataP1();
+        sendFakeBleDataP2();
+    #else
+        sendBleData();
+    #endif
+
+      }else{
+        if (bleConnectionStatus==true)
+          SerialDebug.println("BLE:Disconnected");
+        bleConnectionStatus=false;
+      }
+    }
   }
-}
   
   if (!AcmSerial.isReady()){
     usbCounterCycle++;
-    if (usbCounterCycle>5){         // Need 5 Cycle of USB.task to init the USB
+    if (usbCounterCycle>10){         // Need 5 Cycle of USB.task to init the USB
       SerialDebug.println("USB Serial is not ready sleep for 10sec");
-      delay(10000);
+      delay(1000);
       usbCounterCycle=0;
     }
   }
