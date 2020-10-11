@@ -3,7 +3,7 @@
 WaterRower S4 BLE Arduino SAMD21 BLE
 
 
-##Introduction
+## Introduction
 
 The aim of this project is to build a small & efficient BLE Module for the S4 WaterRower Monitor to be used by a Smartphone App or a Sport Watch (Garmin)
 
@@ -31,12 +31,12 @@ As per the BLE GATT specification, The Fitness Machine Service implement the Row
 Fitness Service UID is 0x1826
 RowerData Characteristics UID is 0x2AD1
 
-###Reading the Specification, each BLE message is made of 
+### Reading the Specification, each BLE message is made of 
 - Bitfield data : define which field is present
 - Datafield : datafield
 
-###Bytefield construction :
-
+### Bytefield construction :
+`
 >  // 0000000000001 - 1   - 0x001 - More Data 0
 >  // 0000000000010 - 2   - 0x002 - Average Stroke present
 >  // 0000000000100 - 4   - 0x004 - Total Distance Present
@@ -50,11 +50,12 @@ RowerData Characteristics UID is 0x2AD1
 >  // 0010000000000 - 1024- 0x080 - Metabolic Equivalent present
 >  // 0100000000000 - 2048- 0x080 - Elapsed Time present
 >  // 1000000000000 - 4096- 0x080 - Remaining Time present
+`
 
 **Warning 1 <!> the first item is working the opposite way : 0 field are present, 1 field are not present**
 
-###List of Field with size :
-
+### List of Field with size :
+`
 >  //  C1  Stroke Rate             uint8     Position    2 (After the ByteField 2 bytes)
 >  //  C1  Stroke Count            uint16    Position    3 
 >  //  C2  Average Stroke Rate     uint8     Position    5
@@ -71,7 +72,7 @@ RowerData Characteristics UID is 0x2AD1
 >  //  C11 Metabolic Equivalent    uint8     Position    25
 >  //  C12 Elapsed Time            uint16    Position    26
 >  //  C13 Remaining Time          uint16    Position    28
-
+`
 ** Warning 2 <!> the Nordic BLE module is able to manage 30 Bytes message including header meaning 20 Bytes. ** 
 
 If you need all the fields, then the BLE message will have to be splitted in 2 sub message.
