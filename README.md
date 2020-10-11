@@ -77,6 +77,7 @@ RowerData Characteristics UID is 0x2AD1
 
 If you need all the fields, then the BLE message will have to be splitted in 2 sub message.
 
+
 ## S4 PART
 
 
