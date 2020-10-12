@@ -2,6 +2,8 @@
 
 WaterRower S4 BLE Arduino SAMD21 BLE
 
+# ![BLE S4](https://raw.githubusercontent.com/vibr77/wr_s4bl3_samd/main/images/A2829-01.jpg)+![WR](https://raw.githubusercontent.com/vibr77/wr_s4bl3_samd/main/images/wrS4.jpeg)
+
 
 ## Introduction
 

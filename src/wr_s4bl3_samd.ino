@@ -1,7 +1,7 @@
 //  --------------------------------------------------------------------------
 //  WaterRower S4 BLE Interface
 //  Hardware: Using GATT Fitness Machine Service & Rower Data Characteristics 
-//  Version: 0.13
+//  Version: 0.14
 //  Date: 2020/10/10
 //  Author: Vincent Besson
 //  Note: Testing on Adafruit Feather MO BLE Express
