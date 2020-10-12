@@ -1,7 +1,7 @@
 //  --------------------------------------------------------------------------
 //  WaterRower S4 BLE Interface
 //  Hardware: Using GATT Fitness Machine Service & Rower Data Characteristics 
-//  Version: 0.15
+//  Version: 0.16
 //  Date: 2020/10/10
 //  Author: Vincent Besson
 //  Note: Testing on Adafruit Feather MO BLE Express
@@ -29,7 +29,7 @@
 #define _BUFFSIZE 64
 #define _S4_PORT_SPEED 57600
 
-#define SerialDebug Serial1                // Need to fix this as it is not working
+#define SerialDebug Serial1
       
 #define FitnessMachineService 0x1826
 
@@ -154,6 +154,7 @@ uint16_t  rowerDataFlagsP2=0b1111100000001;
 struct rowerDataKpi{
   int bpm; // Start of Part 1
   int strokeCount;
+  int tmpstrokeRate;
   int strokeRate;
   int averageStokeRate;
   int totalDistance;
@@ -177,9 +178,7 @@ struct rowerDataKpi{
 struct rowerDataKpi rdKpi;
 
 /*
- * InitBLE
- * Will init the BLE module of M0 Express
- * 
+ * InitBLE Will init the BLE module of M0 Express
  */
 
 void initBLE(){
@@ -343,6 +342,7 @@ void initBleData(){
   
   rdKpi.bpm=0;
   rdKpi.strokeCount=0;
+  rdKpi.tmpstrokeRate=0;
   rdKpi.strokeRate=0;
   rdKpi.averageStokeRate=0;
   rdKpi.totalDistance=0;
@@ -363,27 +363,28 @@ void initBleData(){
   rdKpi.remainingTime=0;
 }
 
+ /*
+  * Selected Field of BLE Data Sent  
+  */
+
 void sendBleLightData(){
   // This function is a subset of field to be sent in one piece
   // An alternative to the sendBleData()
-  uint16_t  rowerDataFlags=0b0000101111110;
-  //P1
-  // 0000000000001 - 1   - 0x001 - More Data 0 <!> Present !!! Read the F... Manual !!!
-  // 0000000000010 - 2   - 0x002 - Average Stroke present
-  // 0000000000100 - 4   - 0x004 - Total Distance Present
-  // 0000000001000 - 8   - 0x008 - Instantaneous Pace present
-  // 0000000010000 - 16  - 0x010 - Average Pace Present
-  // 0000000100000 - 32  - 0x020 - Instantaneous Power present
-  // 0000001000000 - 64  - 0x040 - Average Power present
+  uint16_t  rowerDataFlags=0b0000001111110;
+
+  // 0000000000001 - 1   - 0x001 + More Data 0 <!> Present !!! Read the F... Manual !!!
+  // 0000000000010 - 2   - 0x002 + Average Stroke present
+  // 0000000000100 - 4   - 0x004 + Total Distance Present
+  // 0000000001000 - 8   - 0x008 + Instantaneous Pace present
+  // 0000000010000 - 16  - 0x010 + Average Pace Present
+  // 0000000100000 - 32  - 0x020 + Instantaneous Power present
+  // 0000001000000 - 64  - 0x040 + Average Power present
   // 0000010000000 - 128 - 0x080 - Resistance Level present
-  //P2
-  // 0000100000000 - 256 - 0x080 - Expended Energy present
+  // 0000100000000 - 256 - 0x080 + Expended Energy present
   // 0001000000000 - 512 - 0x080 - Heart Rate present
   // 0010000000000 - 1024- 0x080 - Metabolic Equivalent present
   // 0100000000000 - 2048- 0x080 - Elapsed Time present
   // 1000000000000 - 4096- 0x080 - Remaining Time present
-
-  //  0000101111110  
 
   //  C1  Stroke Rate             uint8     Position    2  + (After the Flag 2bytes)
   //  C1  Stroke Count            uint16    Position    3  +
@@ -402,11 +403,12 @@ void sendBleLightData(){
   //  C12 Elapsed Time            uint16    Position    26 -
   //  C13 Remaining Time          uint16    Position    28 -
 
-  unsigned char cRower[22];
+  unsigned char cRower[17];
 
   cRower[0]=rowerDataFlags & 0x000000FF;
   cRower[1]=(rowerDataFlags & 0x0000FF00) >> 8;
-  rdKpi.strokeRate=rdKpi.strokeRate*2;
+  
+  rdKpi.strokeRate=rdKpi.tmpstrokeRate*2;
   cRower[2] = rdKpi.strokeRate & 0x000000FF;
   
   cRower[3] = rdKpi.strokeCount & 0x000000FF;
@@ -430,18 +432,13 @@ void sendBleLightData(){
   cRower[15] = rdKpi.averagePower & 0x000000FF;
   cRower[16] = (rdKpi.averagePower & 0x0000FF00) >> 8;
 
-  cRower[17] = rdKpi.totalEnergy & 0x000000FF;
-  cRower[18] = (rdKpi.totalEnergy & 0x0000FF00) >> 8;
-
-  cRower[19] = rdKpi.energyPerHour & 0x000000FF;
-  cRower[20] = (rdKpi.energyPerHour & 0x0000FF00) >> 8;
-
-  cRower[21] = rdKpi.energyPerMinute & 0x000000FF;
-
-  gatt.setChar(fitnessMachineRowerDataId, cRower, 22);
+  gatt.setChar(fitnessMachineRowerDataId, cRower, 17);
 
 }
 
+/*
+ *  Full Message sentd in 2 part
+ */
 
 void sendBleData(){
   // Due the size limitation of the message in the BLE Stack of the NRF
@@ -452,7 +449,8 @@ void sendBleData(){
   // Send the P1 part of the Message
   cRower[0]=rowerDataFlagsP1 & 0x000000FF;
   cRower[1]=(rowerDataFlagsP1 & 0x0000FF00) >> 8;
-  rdKpi.strokeRate=rdKpi.strokeRate*2;
+  
+  rdKpi.strokeRate=rdKpi.tmpstrokeRate*2;
   cRower[2] = rdKpi.strokeRate & 0x000000FF;
   
   cRower[3] = rdKpi.strokeCount & 0x000000FF;
@@ -528,13 +526,13 @@ struct s4MemoryMap s4mmap[S4SIZE];
 void setup(){
   
   SerialDebug.begin(19200);
-  SerialDebug.println("*");
-  SerialDebug.println("Starting");
-  SerialDebug.println("WaterRower S4 BLE Module v0.12");
-  SerialDebug.println("Vincent Besson");
-  SerialDebug.println("CR 2020");
-
-  
+  SerialDebug.println("/************************************");
+  SerialDebug.println(" * Starting");
+  SerialDebug.println(" * WaterRower S4 BLE Module v0.12");
+  SerialDebug.println(" * Vincent Besson");
+  SerialDebug.println(" * Date 2020/10/12");
+  SerialDebug.println(" * Version 0.15");
+  SerialDebug.println(" ***********************************/");
 
   sprintf(s4mmap[0].desc,"instantaneousPower");
   sprintf(s4mmap[0].addr,"088");
@@ -557,7 +555,7 @@ void setup(){
   sprintf(s4mmap[3].desc,"strokeRate");
   sprintf(s4mmap[3].addr,"1A9");
   sprintf(s4mmap[3].msize,"S");
-  s4mmap[3].kpi=&rdKpi.strokeRate;
+  s4mmap[3].kpi=&rdKpi.tmpstrokeRate;
   s4mmap[3].base=16;
 
   sprintf(s4mmap[4].desc,"elapsedTime");
@@ -717,6 +715,7 @@ void decodeS4Message(char cmd[]){
           SerialDebug.println("S4 Good Firmware Version");
         }
         writeCdcAcm((char*)"RESET");         // You should here a Bip on the WaterRower
+        
         readCdcAcm();
         s4InitFlag=true;
       }
@@ -753,15 +752,14 @@ void decodeS4Message(char cmd[]){
 
 unsigned long currentTime=0;
 unsigned long previousTime=0;
-unsigned long pCycleTime=0;
 
 void loop(){
   // <!> Remember delay is Evil !!! 
   // readCdcAcm is here at the top for a reason 
+  UsbH.Task(); // Todo: test if UsbH has to be at the very top
 
   currentTime=millis();
   readCdcAcm(); 
-  UsbH.Task();      // Todo: test if UsbH has to be at the very top
   
   if (s4InitFlag==false && AcmSerial.isReady() ){
     if (s4SendUsb==false){
@@ -784,6 +782,7 @@ void loop(){
       }
       
       // Send BLE Data 
+
       if (ble.isConnected() && s4InitFlag==true ){ // Start Sending BLE Data only when BLE is connected and when S4 is fully initialized
         if (bleConnectionStatus==false)
           SerialDebug.println("BLE:Connected");   
@@ -793,7 +792,8 @@ void loop(){
         sendFakeBleDataP1();
         sendFakeBleDataP2();
 #else
-        sendBleData();
+        //sendBleData();
+        sendBleLightData();
 #endif
 
       }else{
@@ -806,7 +806,7 @@ void loop(){
   
   if (!AcmSerial.isReady()){
     usbCounterCycle++;
-    if (usbCounterCycle>10){         // Need 32 Cycle of USB.task to init the USB
+    if (usbCounterCycle>10){  // Need 32 Cycle of USB.task to init the USB
       SerialDebug.println("USB Serial is not ready sleep for 1 sec");
       delay(1000);
       usbCounterCycle=0;

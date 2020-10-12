@@ -110,7 +110,7 @@ To debug this App while connected to the S4, I use a serial port on pin RX/TX +G
 Todo :
 
 - Change BLE message format to only focus on : strokeCount, StrokeRate, totalDistance, InstaneousPower. Remove everything else
-- Increase startup time
+- Optimize startup time
 - Do testing to finetune ACM port Management.
 - Add a Poly Battery, Print a 3D case, 
 - Create a Garmin Custom Field
