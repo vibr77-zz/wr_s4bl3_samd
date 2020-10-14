@@ -26,6 +26,7 @@
 #define REFRESH_DATA_TIME 200
 //#define USE_FAKE_DATA
 //#define DEBUG
+#define DEEPTRACE
 #define _BUFFSIZE 64
 #define _S4_PORT_SPEED 57600
 
@@ -368,6 +369,10 @@ void initBleData(){
   */
 
 void sendBleLightData(){
+
+#ifdef DEEPTRACE
+  SerialDebug.printf("sendBleLightData() start");
+#endif
   // This function is a subset of field to be sent in one piece
   // An alternative to the sendBleData()
   uint16_t  rowerDataFlags=0b0000001111110;
@@ -434,6 +439,9 @@ void sendBleLightData(){
 
   gatt.setChar(fitnessMachineRowerDataId, cRower, 17);
 
+#ifdef DEEPTRACE
+  SerialDebug.printf("sendBleLightData() end");
+#endif
 }
 
 /*
@@ -600,6 +608,10 @@ void writeCdcAcm(char str[]){
   
   // Important S4 can not handle more than 25 msec
 
+#ifdef DEEPTRACE
+  SerialDebug.printf("writeCdcAcm() start");
+#endif
+
   uint8_t rcode;  //return code of the USB port
   uint8_t c;
   int ll=strlen(str)+2;  
@@ -629,10 +641,19 @@ void writeCdcAcm(char str[]){
   }else{
     SerialDebug.print("USB CDC ACM not ready for write\n");
   }
+
+#ifdef DEEPTRACE
+  SerialDebug.printf("writeCdcAcm() end");
+#endif
+
 }
 
 void readCdcAcm(){
-  
+
+#ifdef DEEPTRACE
+  SerialDebug.printf("readCdcAcm() start");
+#endif
+
   /* reading USB CDC ACM */
   /* buffer size must be greater or equal to max.packet size */
   /* it it set to 64 (largest possible max.packet size) here, can be tuned down for particular endpoint */
@@ -663,9 +684,17 @@ void readCdcAcm(){
   }else{
     SerialDebug.print("USB CDC ACM not ready for read\n");
   }
+
+#ifdef DEEPTRACE
+  SerialDebug.printf("readCdcAcm() end");
+#endif
 }
 
 void parseS4ReceivedData(char data[],int len){
+
+#ifdef DEEPTRACE
+  SerialDebug.printf("parseS4ReceivedData() start");
+#endif
 
   SerialDebug.println(data);
   if (len>2){
@@ -682,15 +711,34 @@ void parseS4ReceivedData(char data[],int len){
   }else{
       SerialDebug.println("Inv msg");
    }
+
+#ifdef DEEPTRACE
+  SerialDebug.printf("parseS4ReceivedData() end");
+#endif
+
 }
 
 int asciiHexToInt(char hex[],int base){
+
+#ifdef DEEPTRACE
+  SerialDebug.printf("asciiHexToInt() start");
+#endif
+
   //https://stackoverflow.com/questions/23576827/arduino-convert-a-string-hex-ffffff-into-3-int
   int number = (int) strtol( &hex[0], NULL, base);
+
+#ifdef DEEPTRACE
+  SerialDebug.printf("asciiHexToInt() end");
+#endif
+
   return number;
 }
 
 void decodeS4Message(char cmd[]){
+
+#ifdef DEEPTRACE
+  SerialDebug.printf("decodeS4Message() start");
+#endif
 
 #ifdef DEBUG
   SerialDebug.print("=");
@@ -747,13 +795,25 @@ void decodeS4Message(char cmd[]){
      
     case 'S':
       break;
+    
+    default:
+      break;
   }
+
+#ifdef DEEPTRACE
+  SerialDebug.printf("decodeS4Message() end");
+#endif
+
 }
 
 unsigned long currentTime=0;
 unsigned long previousTime=0;
 
 void loop(){
+
+#ifdef DEEPTRACE
+  SerialDebug.printf("loop() start");
+#endif
   // <!> Remember delay is Evil !!! 
   // readCdcAcm is here at the top for a reason 
   UsbH.Task(); // Todo: test if UsbH has to be at the very top
@@ -812,4 +872,8 @@ void loop(){
       usbCounterCycle=0;
     }
   }
+#ifdef DEEPTRACE
+  SerialDebug.printf("loop() end");
+#endif
+
 }
