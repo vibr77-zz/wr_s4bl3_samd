@@ -427,7 +427,8 @@ void sendBleLightData(){
   cRower[7] = (rdKpi.totalDistance & 0x0000FF00) >> 8;
   cRower[8] = (rdKpi.totalDistance & 0x00FF0000) >> 16;
   
-  rdKpi.instantaneousPace=(100000/rdKpi.tmpinstantaneousPace)/2;
+  if (rdKpi.tmpinstantaneousPace>0) // Avoid Divide by Zero
+    rdKpi.instantaneousPace=(100000/rdKpi.tmpinstantaneousPace)/2;
   cRower[9] = rdKpi.instantaneousPace & 0x000000FF;
   cRower[10] = (rdKpi.instantaneousPace & 0x0000FF00) >> 8;
   
