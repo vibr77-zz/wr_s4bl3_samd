@@ -23,10 +23,10 @@
 // Global Define 
 
 #define BLE_SERVICE_NAME "WR S4BL3"
-#define REFRESH_DATA_TIME 200
+#define REFRESH_DATA_TIME 100
 //#define USE_FAKE_DATA
 //#define DEBUG
-#define DEEPTRACE
+//#define DEEPTRACE
 #define _BUFFSIZE 64
 #define _S4_PORT_SPEED 57600
 
@@ -186,7 +186,7 @@ void initBLE(){
   randomSeed(micros());
 
   /* Initialise the module */
-  SerialDebug.print(F("Initialising the Bluefruit LE module:"));
+  //SerialDebug.print(F("Initialising the Bluefruit LE module:"));
 
   if ( !ble.begin(VERBOSE_MODE) ){
     error(F("Couldn't find Bluefruit, make sure it's in CoMmanD mode & check wiring?"));
@@ -541,7 +541,7 @@ void setup(){
   SerialDebug.println(" * Date 2020/10/12");
   SerialDebug.println(" * Version 0.15");
   SerialDebug.println(" ***********************************/");
-
+  SerialDebug.println("Hey");
   sprintf(s4mmap[0].desc,"instantaneousPower");
   sprintf(s4mmap[0].addr,"088");
   sprintf(s4mmap[0].msize,"D");
@@ -605,7 +605,7 @@ void setup(){
 }
 
 void writeCdcAcm(char str[]){
-  
+  UsbH.Task();
   // Important S4 can not handle more than 25 msec
 
 #ifdef DEEPTRACE
@@ -617,9 +617,9 @@ void writeCdcAcm(char str[]){
   int ll=strlen(str)+2;  
   char buf[ll+1]; // Buffer of Bytes to be sent
   sprintf(buf,"%s\r\n",str);
-
+  
   if( AcmSerial.isReady()) {
-
+    readCdcAcm();
     if (ll > 0) {
       /* sending to USB CDC ACM */
 #ifdef DEBUG
@@ -637,6 +637,8 @@ void writeCdcAcm(char str[]){
         if (rcode)
           ErrorMessage<uint8_t>(PSTR("SndData"), rcode);
       } 
+      //readCdcAcm();
+      //delay(25); 
     }
   }else{
     SerialDebug.print("USB CDC ACM not ready for write\n");
@@ -649,7 +651,7 @@ void writeCdcAcm(char str[]){
 }
 
 void readCdcAcm(){
-
+//UsbH.Task();
 #ifdef DEEPTRACE
   SerialDebug.printf("readCdcAcm() start");
 #endif
@@ -664,7 +666,8 @@ void readCdcAcm(){
     uint8_t rcode;
     char buf[64];    
     uint16_t rcvd = sizeof(buf);
-
+    
+    //do {
     rcode = AcmSerial.RcvData(&rcvd, (uint8_t *)buf); 
     if(rcvd){ //more than zero bytes received
       buf[rcvd]='\0';
@@ -677,10 +680,11 @@ void readCdcAcm(){
 #endif
       parseS4ReceivedData(buf,rcvd);
     }
-    rcode = AcmSerial.RcvData(&rcvd, (uint8_t *)buf);
+    //rcode = AcmSerial.RcvData(&rcvd, (uint8_t *)buf);
+    //parseS4ReceivedData(buf,rcvd);
     if (rcode && rcode != USB_ERRORFLOW)
       ErrorMessage<uint8_t>(PSTR("Ret"), rcode);
-     
+    //}while(rcvd>0);
   }else{
     SerialDebug.print("USB CDC ACM not ready for read\n");
   }
@@ -750,7 +754,7 @@ void decodeS4Message(char cmd[]){
     
       if (!strcmp(cmd,"_WR_")){
         writeCdcAcm((char*)"IV?");
-        readCdcAcm();
+        //readCdcAcm();
       }
       break;
     case 'E':
@@ -810,20 +814,22 @@ unsigned long currentTime=0;
 unsigned long previousTime=0;
 
 void loop(){
-
+UsbH.Task();
 #ifdef DEEPTRACE
-  SerialDebug.printf("loop() start");
+  SerialDebug.print("loop() start");
 #endif
   // <!> Remember delay is Evil !!! 
   // readCdcAcm is here at the top for a reason 
-  UsbH.Task(); // Todo: test if UsbH has to be at the very top
+  //UsbH.Task(); // Todo: test if UsbH has to be at the very top
 
   currentTime=millis();
-  readCdcAcm(); 
+  //
   
   if (s4InitFlag==false && AcmSerial.isReady() ){
     if (s4SendUsb==false){
+      SerialDebug.print("USB read");
       writeCdcAcm((char*)"USB");
+      readCdcAcm(); 
       s4SendUsb=true;
     }
   }else{
@@ -863,6 +869,9 @@ void loop(){
       }
     }
   }
+  //delay(10);
+  //UsbH.Task();
+  readCdcAcm(); 
   
   if (!AcmSerial.isReady()){
     usbCounterCycle++;
@@ -873,7 +882,7 @@ void loop(){
     }
   }
 #ifdef DEEPTRACE
-  SerialDebug.printf("loop() end");
+  SerialDebug.println("loop() end");
 #endif
-
+delay(5);
 }

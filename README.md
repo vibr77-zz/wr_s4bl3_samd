@@ -7,7 +7,7 @@ WaterRower S4 BLE Arduino SAMD21 BLE
 
 ## Introduction
 
-The aim of this project is to build a small & efficient BLE Module for the S4 WaterRower Monitor to be used by a Smartphone App or a Sport Watch (Garmin)
+The aim of this project is to interface your WaterRower with an App or with your Garmin Watch. the way to do it is to build a small & efficient BLE Module for the S4 WaterRower Monitor providing a Bluetooth Low Energy module.
 
 IOS / Android Exemple app Water Rower Connect https://apps.apple.com/fr/app/waterrower-connect/id1463763094
 
