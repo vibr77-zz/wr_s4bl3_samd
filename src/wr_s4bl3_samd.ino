@@ -1,7 +1,7 @@
 //  --------------------------------------------------------------------------
 //  WaterRower S4 BLE Interface
 //  Hardware: Using GATT Fitness Machine Service & Rower Data Characteristics 
-//  Version: 0.17
+//  Version: 0.19
 //  Date: 2020/10/10
 //  Author: Vincent Besson
 //  Note: Testing on Adafruit Feather MO BLE Express
@@ -160,6 +160,7 @@ struct rowerDataKpi{
   int averageStokeRate;
   int totalDistance;
   int instantaneousPace;
+  int tmpinstantaneousPace;
   int averagePace;
   int instantaneousPower;
   int averagePower;
@@ -186,7 +187,7 @@ void initBLE(){
   randomSeed(micros());
 
   /* Initialise the module */
-  SerialDebug.print(F("Initialising the Bluefruit LE module:"));
+  //SerialDebug.print(F("Initialising the Bluefruit LE module:"));
 
   if ( !ble.begin(VERBOSE_MODE) ){
     error(F("Couldn't find Bluefruit, make sure it's in CoMmanD mode & check wiring?"));
@@ -250,6 +251,7 @@ void initFakeBleData(){
   rdKpi.averageStokeRate=25;
   rdKpi.totalDistance=1000;
   rdKpi.instantaneousPace=90;
+  rdKpi.tmpinstantaneousPace=0;
   rdKpi.averagePace=120;
   rdKpi.instantaneousPower=70;
   rdKpi.averagePower=100;
@@ -425,6 +427,7 @@ void sendBleLightData(){
   cRower[7] = (rdKpi.totalDistance & 0x0000FF00) >> 8;
   cRower[8] = (rdKpi.totalDistance & 0x00FF0000) >> 16;
   
+  rdKpi.instantaneousPace=(100000/rdKpi.tmpinstantaneousPace)/2;
   cRower[9] = rdKpi.instantaneousPace & 0x000000FF;
   cRower[10] = (rdKpi.instantaneousPace & 0x0000FF00) >> 8;
   
@@ -539,7 +542,7 @@ void setup(){
   SerialDebug.println(" * WaterRower S4 BLE Module v0.12");
   SerialDebug.println(" * Vincent Besson");
   SerialDebug.println(" * Date 2020/10/17");
-  SerialDebug.println(" * Version 0.17");
+  SerialDebug.println(" * Version 0.19");
   SerialDebug.println(" ***********************************/");
  
   sprintf(s4mmap[0].desc,"instantaneousPower");
@@ -569,7 +572,7 @@ void setup(){
   sprintf(s4mmap[4].desc,"instantaneousPace m/s");
   sprintf(s4mmap[4].addr,"14A");
   sprintf(s4mmap[4].msize,"D");
-  s4mmap[4].kpi=&rdKpi.instantaneousPace;
+  s4mmap[4].kpi=&rdKpi.tmpinstantaneousPace;
   s4mmap[4].base=16;
 
   // sprintf(s4mmap[4].desc,"elapsedTime");
@@ -643,8 +646,6 @@ void writeCdcAcm(char str[]){
         if (rcode)
           ErrorMessage<uint8_t>(PSTR("SndData"), rcode);
       } 
-      //readCdcAcm();
-      //delay(25); 
     }
   }else{
     SerialDebug.print("USB CDC ACM not ready for write\n");
@@ -781,13 +782,13 @@ void decodeS4Message(char cmd[]){
           
             if (!strncmp(cmd+3,s4mmap[i].addr,3)){
               *s4mmap[i].kpi=asciiHexToInt(cmd+6,s4mmap[i].base);
-#ifdef DEBUG
+//#ifdef DEBUG
               SerialDebug.print(s4mmap[i].desc);
               SerialDebug.print(",");
               SerialDebug.print(s4mmap[i].addr);
               SerialDebug.print("=");
               SerialDebug.println(*s4mmap[i].kpi);
-#endif            
+//#endif            
               break;  
             }
           }
@@ -847,7 +848,7 @@ UsbH.Task();
         writeCdcAcm(cmd);
 
         s4KpiTurn++;
-        if (s4KpiTurn==4)
+        if (s4KpiTurn==5)
         s4KpiTurn=0; 
       }
       
