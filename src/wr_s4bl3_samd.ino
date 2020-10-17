@@ -186,7 +186,7 @@ void initBLE(){
   randomSeed(micros());
 
   /* Initialise the module */
-  //SerialDebug.print(F("Initialising the Bluefruit LE module:"));
+  SerialDebug.print(F("Initialising the Bluefruit LE module:"));
 
   if ( !ble.begin(VERBOSE_MODE) ){
     error(F("Couldn't find Bluefruit, make sure it's in CoMmanD mode & check wiring?"));
@@ -566,11 +566,17 @@ void setup(){
   s4mmap[3].kpi=&rdKpi.tmpstrokeRate;
   s4mmap[3].base=16;
 
-  sprintf(s4mmap[4].desc,"elapsedTime");
-  sprintf(s4mmap[4].addr,"1E8");
+  sprintf(s4mmap[4].desc,"instantaneousPace m/s");
+  sprintf(s4mmap[4].addr,"14A");
   sprintf(s4mmap[4].msize,"D");
-  s4mmap[4].kpi=&rdKpi.elapsedTime;
+  s4mmap[4].kpi=&rdKpi.instantaneousPace;
   s4mmap[4].base=16;
+
+  // sprintf(s4mmap[4].desc,"elapsedTime");
+  // sprintf(s4mmap[4].addr,"1E8");
+  // sprintf(s4mmap[4].msize,"D");
+  // s4mmap[4].kpi=&rdKpi.elapsedTime;
+  // s4mmap[4].base=16;
 
   sprintf(s4mmap[5].desc,"elapsedTimeSec");
   sprintf(s4mmap[5].addr,"1E1");
