@@ -1,7 +1,7 @@
 //  --------------------------------------------------------------------------
 //  WaterRower S4 BLE Interface
 //  Hardware: Using GATT Fitness Machine Service & Rower Data Characteristics 
-//  Version: 0.16
+//  Version: 0.17
 //  Date: 2020/10/10
 //  Author: Vincent Besson
 //  Note: Testing on Adafruit Feather MO BLE Express
@@ -538,10 +538,10 @@ void setup(){
   SerialDebug.println(" * Starting");
   SerialDebug.println(" * WaterRower S4 BLE Module v0.12");
   SerialDebug.println(" * Vincent Besson");
-  SerialDebug.println(" * Date 2020/10/12");
-  SerialDebug.println(" * Version 0.15");
+  SerialDebug.println(" * Date 2020/10/17");
+  SerialDebug.println(" * Version 0.17");
   SerialDebug.println(" ***********************************/");
-  SerialDebug.println("Hey");
+ 
   sprintf(s4mmap[0].desc,"instantaneousPower");
   sprintf(s4mmap[0].addr,"088");
   sprintf(s4mmap[0].msize,"D");
@@ -667,7 +667,6 @@ void readCdcAcm(){
     char buf[64];    
     uint16_t rcvd = sizeof(buf);
     
-    //do {
     rcode = AcmSerial.RcvData(&rcvd, (uint8_t *)buf); 
     if(rcvd){ //more than zero bytes received
       buf[rcvd]='\0';
@@ -680,11 +679,10 @@ void readCdcAcm(){
 #endif
       parseS4ReceivedData(buf,rcvd);
     }
-    //rcode = AcmSerial.RcvData(&rcvd, (uint8_t *)buf);
-    //parseS4ReceivedData(buf,rcvd);
+
     if (rcode && rcode != USB_ERRORFLOW)
       ErrorMessage<uint8_t>(PSTR("Ret"), rcode);
-    //}while(rcvd>0);
+
   }else{
     SerialDebug.print("USB CDC ACM not ready for read\n");
   }
@@ -814,16 +812,16 @@ unsigned long currentTime=0;
 unsigned long previousTime=0;
 
 void loop(){
+
 UsbH.Task();
+
 #ifdef DEEPTRACE
   SerialDebug.print("loop() start");
 #endif
   // <!> Remember delay is Evil !!! 
   // readCdcAcm is here at the top for a reason 
-  //UsbH.Task(); // Todo: test if UsbH has to be at the very top
-
+  
   currentTime=millis();
-  //
   
   if (s4InitFlag==false && AcmSerial.isReady() ){
     if (s4SendUsb==false){
@@ -869,8 +867,7 @@ UsbH.Task();
       }
     }
   }
-  //delay(10);
-  //UsbH.Task();
+
   readCdcAcm(); 
   
   if (!AcmSerial.isReady()){
@@ -884,5 +881,5 @@ UsbH.Task();
 #ifdef DEEPTRACE
   SerialDebug.println("loop() end");
 #endif
-delay(5);
+delay(5); // This avoid coredump mesured by JTAG, Period of S4 is 5 ms ;)
 }
