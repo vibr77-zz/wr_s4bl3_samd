@@ -1,6 +1,10 @@
 # WaterRower S4BL3 Bluetooth BLE for S4
 
 ## Changelog
+-18/10/2020 v0.30 First stable release, working (could have named it v1 ;)
+  + Add BLE Battery Service to monitor Adafruit Feather Battery
+  + Add BLE Factory Reset at the startup
+  + Add Condition to start BLE only after USB S4 Reset confirmed 
 -17/10/2020 v0.17 JTAG Debugging with JLINK EDU MINI
   + Seems that stability issue is now fixed (Added 5mc delay and the end)
   + More Reactivity with write / read collision avoid

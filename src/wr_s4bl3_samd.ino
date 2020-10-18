@@ -1,10 +1,9 @@
 //  --------------------------------------------------------------------------
 //  WaterRower S4 BLE Interface
 //  Hardware: Using GATT Fitness Machine Service & Rower Data Characteristics 
-//  Version: 0.19
 //  Date: 2020/10/10
 //  Author: Vincent Besson
-//  Note: Testing on Adafruit Feather MO BLE Express
+//  Note: GATT implemntation on Adafruit Feather ATMEL Micro SAMD21 MO BLE
 //  ---------------------------------------------------------------------------
 
 #include <cdcacm.h>
@@ -21,23 +20,27 @@
 #include "BluefruitConfig.h"
 
 // Global Define 
+#define _VERSION          0.30
+#define BLE_SERVICE_NAME "WR S4BL3"           // name of the Bluetooth Service 
+#define REFRESH_DATA_TIME 100                 // ms cycle before gathering 
+//#define USE_FAKE_DATA                       // Simulate BLE service
+//#define DEBUG                               // activate verbose debug on SerialDebug port
+//#define DEEPTRACE                           // enable start and end of fucntion to trace any core location
+#define _BUFFSIZE 64                          // Max buffer len to read/write Usb Cdc Acm byte queue
+#define _S4_PORT_SPEED 57600                  // do not change that it has been tuned for SAMD21
 
-#define BLE_SERVICE_NAME "WR S4BL3"
-#define REFRESH_DATA_TIME 100
-//#define USE_FAKE_DATA
-//#define DEBUG
-//#define DEEPTRACE
-#define _BUFFSIZE 64
-#define _S4_PORT_SPEED 57600
+#define VBATPIN A7                            // aka D9 chip pint with a double 100k reistance (already included)
 
-#define SerialDebug Serial1
+#define SerialDebug Serial1                   // Usb is used by S4, additionnal port on SAMD21
       
-#define FitnessMachineService 0x1826
+#define FitnessMachineService       0x1826
+#define FitnessMachineControlPoint  0x2AD9    // CX Not implemented yet
+#define FitnessMachineFeature       0x2ACC    // CX Not implemented yet
+#define FitnessMachineStatus        0x2ADA    // CX Not implemented yet
+#define FitnessMachineRowerData     0x2AD1    // CX Main cx implemented
 
-#define FitnessMachineControlPoint 0x2AD9 // Not implemented yet
-#define FitnessMachineFeature      0x2ACC // Not implemented yet
-#define FitnessMachineStatus       0x2ADA // Not implemented yet
-#define FitnessMachineRowerData    0x2AD1
+#define batteryService              0x180F    // Additionnal battery service
+#define batteryLevel                0x2A19    // Additionnal cx to battery service
 
 class ACMAsyncOper : public CDCAsyncOper{
   public:
@@ -104,12 +107,14 @@ void error(const __FlashStringHelper*err) {
 
 // Service
 int32_t fitnessMachineServiceId;
+int32_t batteryServiceId;
 
 // Cx
 int32_t fitnessMachineControlPointId;
 int32_t fitnessMachineFeatureId;
 int32_t fitnessMachineStatusId;
 int32_t fitnessMachineRowerDataId;
+int32_t batteryLevelId;
 
 // The BLE Stack can only send 20 Bytes at a time
 // We need to split the BLE Message in 2 pieces
@@ -120,7 +125,7 @@ uint16_t  rowerDataFlagsP1=0b0000011111110;
 uint16_t  rowerDataFlagsP2=0b1111100000001;
 
   //P1
-  // 0000000000001 - 1   - 0x001 - More Data 0 <!> Present !!! Read the F... Manual !!!
+  // 0000000000001 - 1   - 0x001 - More Data 0 <!> WARNINNG <!> This Bit is working the opposite way, 0 means field is present, 1 means not present
   // 0000000000010 - 2   - 0x002 - Average Stroke present
   // 0000000000100 - 4   - 0x004 - Total Distance Present
   // 0000000001000 - 8   - 0x008 - Instantaneous Pace present
@@ -179,6 +184,128 @@ struct rowerDataKpi{
 
 struct rowerDataKpi rdKpi;
 
+bool s4InitFlag=false;
+bool s4SendUsb=false;
+bool bleInitFlag=false;
+
+bool bleConnectionStatus=false;
+
+int s4KpiTurn=0;
+int usbCounterCycle=0;
+
+unsigned long currentTime=0;
+unsigned long previousTime=0;
+unsigned long battPreviousTime=0;
+
+struct s4MemoryMap{
+  char  desc[32];
+  char  addr[4]; // 3+1
+  char  msize[2]; //1+1
+  int * kpi; // void cause can be in or lon int
+  int base; // 10 for Decimal, 16 for Hex used by strtol
+};
+
+#define S4SIZE 9
+struct s4MemoryMap s4mmap[S4SIZE]; 
+
+void setup(){
+
+  
+
+  SerialDebug.begin(19200);
+  delay(25);
+
+  SerialDebug.println("/************************************");
+  SerialDebug.println(" * Starting");
+  SerialDebug.println(" * WaterRower S4 BLE Module ");
+  SerialDebug.println(" * Vincent Besson vincent(at)besson.be");
+  SerialDebug.println(" * Date 2020/10/18");
+  SerialDebug.print  (" * Version ");
+  SerialDebug.println(_VERSION);
+  SerialDebug.println(" ***********************************/");
+ 
+  sprintf(s4mmap[0].desc,"instantaneousPower");
+  sprintf(s4mmap[0].addr,"088");
+  sprintf(s4mmap[0].msize,"D");
+  s4mmap[0].kpi=&rdKpi.instantaneousPower;
+  s4mmap[0].base=16;
+
+  sprintf(s4mmap[1].desc,"totalDistance");
+  sprintf(s4mmap[1].addr,"057");
+  sprintf(s4mmap[1].msize,"D");
+  s4mmap[1].kpi=&rdKpi.totalDistance;
+  s4mmap[1].base=16;
+
+  sprintf(s4mmap[2].desc,"strokeCount");
+  sprintf(s4mmap[2].addr,"140");
+  sprintf(s4mmap[2].msize,"D");
+  s4mmap[2].kpi=&rdKpi.strokeCount;
+  s4mmap[2].base=16;
+
+  sprintf(s4mmap[3].desc,"strokeRate");
+  sprintf(s4mmap[3].addr,"1A9");
+  sprintf(s4mmap[3].msize,"S");
+  s4mmap[3].kpi=&rdKpi.tmpstrokeRate;
+  s4mmap[3].base=16;
+
+  sprintf(s4mmap[4].desc,"instantaneousPace m/s");
+  sprintf(s4mmap[4].addr,"14A");
+  sprintf(s4mmap[4].msize,"D");
+  s4mmap[4].kpi=&rdKpi.tmpinstantaneousPace;
+  s4mmap[4].base=16;
+
+  sprintf(s4mmap[5].desc,"elapsedTimeSec");
+  sprintf(s4mmap[5].addr,"1E1");
+  sprintf(s4mmap[5].msize,"S");
+  s4mmap[5].kpi=&rdKpi.elapsedTimeSec;
+  s4mmap[5].base=10;
+
+  sprintf(s4mmap[6].desc,"elapsedTimeMin");
+  sprintf(s4mmap[6].addr,"1E2");
+  sprintf(s4mmap[6].msize,"S");
+  s4mmap[6].kpi=&rdKpi.elapsedTimeMin;
+  s4mmap[6].base=10;
+
+  sprintf(s4mmap[7].desc,"elapsedTimeHour");
+  sprintf(s4mmap[7].addr,"1E3");
+  sprintf(s4mmap[7].msize,"S");
+  s4mmap[7].kpi=&rdKpi.elapsedTimeHour;
+  s4mmap[7].base=10;
+
+  sprintf(s4mmap[8].desc,"elapsedTime");
+  sprintf(s4mmap[8].addr,"1E8");
+  sprintf(s4mmap[8].msize,"D");
+  s4mmap[8].kpi=&rdKpi.elapsedTime;
+  s4mmap[8].base=16;
+  
+  /*
+   * Wipe Clean the Bluetooth Module
+   */ 
+
+  if ( !ble.begin(VERBOSE_MODE) ){
+    error(F("Couldn't find Bluefruit, make sure it's in CoMmanD mode & check wiring?"));
+  }
+
+  ble.factoryReset(true); // Complete Wipeclean the Bluetooth Module
+  SerialDebug.println("BLE init OK");
+  
+  if (UsbH.Init())
+    SerialDebug.println("USB host failed to initialize");
+  
+  SerialDebug.println("USB Host init OK"); 
+  //initBLE(); // Todo: to be removed, Activate for testing to be removed Move after USB Reset
+  
+  currentTime=millis();
+  previousTime=millis();
+  
+#ifdef USE_FAKE_DATA
+  initFakeBleData();
+#else
+  initBleData();
+#endif
+  
+}
+
 /*
  * InitBLE Will init the BLE module of M0 Express
  */
@@ -187,7 +314,7 @@ void initBLE(){
   randomSeed(micros());
 
   /* Initialise the module */
-  //SerialDebug.print(F("Initialising the Bluefruit LE module:"));
+  SerialDebug.print(F("Init BLE:"));
 
   if ( !ble.begin(VERBOSE_MODE) ){
     error(F("Couldn't find Bluefruit, make sure it's in CoMmanD mode & check wiring?"));
@@ -235,10 +362,23 @@ void initBLE(){
   SerialDebug.println(F("Adding Fitness Machine Service UUID to the advertising payload "));
   uint8_t advdata[] { 0x02, 0x01, 0x06, 0x05, 0x02, 0x26, 0x18, 0x0a, 0x18 };
   ble.setAdvData( advdata, sizeof(advdata) );
+
+  SerialDebug.println(F("Adding the Battery Service definition (UUID = 0x180F): "));
+  batteryServiceId = gatt.addService(batteryService);
+  if (batteryServiceId == 0) {
+    error(F("Could not add Battery Service"));
+  }
+
+  batteryLevelId = gatt.addCharacteristic(batteryLevel, GATT_CHARS_PROPERTIES_NOTIFY, 1, 1, BLE_DATATYPE_BYTEARRAY);
+  if (batteryLevelId == 0) {
+    error(F("Could not add Battery characteristic"));
+  }
   
   /* Reset the device for the new service setting changes to take effect */
   SerialDebug.println(F("Performing a SW reset (service changes require a reset)"));
   ble.reset();
+
+  bleInitFlag=true;
 
   SerialDebug.println();
 }
@@ -266,7 +406,6 @@ void initFakeBleData(){
   rdKpi.elapsedTimeMin=5;
   rdKpi.elapsedTimeHour=1;
   rdKpi.remainingTime=600;
-
 }
 
 void sendFakeBleDataP1(){
@@ -349,6 +488,7 @@ void initBleData(){
   rdKpi.strokeRate=0;
   rdKpi.averageStokeRate=0;
   rdKpi.totalDistance=0;
+  rdKpi.tmpinstantaneousPace=0;
   rdKpi.instantaneousPace=0;
   rdKpi.averagePace=0;
   rdKpi.instantaneousPower=0;
@@ -367,7 +507,8 @@ void initBleData(){
 }
 
  /*
-  * Selected Field of BLE Data Sent  
+  * Selected BLE Fields to be sent in one message (look at the +/_)
+  * This may help to better understand how it is built
   */
 
 void sendBleLightData(){
@@ -379,7 +520,7 @@ void sendBleLightData(){
   // An alternative to the sendBleData()
   uint16_t  rowerDataFlags=0b0000001111110;
 
-  // 0000000000001 - 1   - 0x001 + More Data 0 <!> Present !!! Read the F... Manual !!!
+  // 0000000000001 - 1   - 0x001 + More Data 0 <!> WARNINNG <!> This Bit is working the opposite way, 0 means field is present, 1 means not present
   // 0000000000010 - 2   - 0x002 + Average Stroke present
   // 0000000000100 - 4   - 0x004 + Total Distance Present
   // 0000000001000 - 8   - 0x008 + Instantaneous Pace present
@@ -446,6 +587,38 @@ void sendBleLightData(){
 #ifdef DEEPTRACE
   SerialDebug.printf("sendBleLightData() end");
 #endif
+}
+
+/*
+ * todo This has still to be tested
+ */
+
+void sendBleBattery(){
+
+#ifdef DEEPTRACE
+  SerialDebug.printf("sendBleBattery() start");
+#endif
+unsigned char hexBat[2];
+float measuredVbat = analogRead(VBATPIN);
+measuredVbat *= 2;    // we divided by 2, so multiply back
+measuredVbat *= 3.3;  // Multiply by 3.3V, our reference voltage
+measuredVbat /= 1024; // convert to voltage
+
+
+int batteryLevelPercent=((measuredVbat-2.9)/(5.15-2.90))*100;
+
+SerialDebug.print("Mesured Bat:");
+SerialDebug.println(batteryLevelPercent);
+
+hexBat[0]=batteryLevelPercent & 0x000000FF;
+hexBat[1]='\0'; // just in case 
+
+gatt.setChar(batteryLevelId, hexBat, 1);
+
+#ifdef DEEPTRACE
+  SerialDebug.printf("sendBleBattery() end");
+#endif
+
 }
 
 /*
@@ -518,101 +691,7 @@ void sendBleData(){
 
 }
 
-bool s4InitFlag=false;
-bool s4SendUsb=false;
-bool bleConnectionStatus=false;
-int s4KpiTurn=0;
-int usbCounterCycle=0;
 
-struct s4MemoryMap{
-  char  desc[32];
-  char  addr[4]; // 3+1
-  char  msize[2]; //1+1
-  int * kpi; // void cause can be in or lon int
-  int base; // 10 for Decimal, 16 for Hex used by strtol
-};
-
-#define S4SIZE 8
-struct s4MemoryMap s4mmap[S4SIZE]; 
-
-void setup(){
-  
-  SerialDebug.begin(19200);
-  SerialDebug.println("/************************************");
-  SerialDebug.println(" * Starting");
-  SerialDebug.println(" * WaterRower S4 BLE Module v0.12");
-  SerialDebug.println(" * Vincent Besson");
-  SerialDebug.println(" * Date 2020/10/17");
-  SerialDebug.println(" * Version 0.19");
-  SerialDebug.println(" ***********************************/");
- 
-  sprintf(s4mmap[0].desc,"instantaneousPower");
-  sprintf(s4mmap[0].addr,"088");
-  sprintf(s4mmap[0].msize,"D");
-  s4mmap[0].kpi=&rdKpi.instantaneousPower;
-  s4mmap[0].base=16;
-
-  sprintf(s4mmap[1].desc,"totalDistance");
-  sprintf(s4mmap[1].addr,"057");
-  sprintf(s4mmap[1].msize,"D");
-  s4mmap[1].kpi=&rdKpi.totalDistance;
-  s4mmap[1].base=16;
-
-  sprintf(s4mmap[2].desc,"strokeCount");
-  sprintf(s4mmap[2].addr,"140");
-  sprintf(s4mmap[2].msize,"D");
-  s4mmap[2].kpi=&rdKpi.strokeCount;
-  s4mmap[2].base=16;
-
-  sprintf(s4mmap[3].desc,"strokeRate");
-  sprintf(s4mmap[3].addr,"1A9");
-  sprintf(s4mmap[3].msize,"S");
-  s4mmap[3].kpi=&rdKpi.tmpstrokeRate;
-  s4mmap[3].base=16;
-
-  sprintf(s4mmap[4].desc,"instantaneousPace m/s");
-  sprintf(s4mmap[4].addr,"14A");
-  sprintf(s4mmap[4].msize,"D");
-  s4mmap[4].kpi=&rdKpi.tmpinstantaneousPace;
-  s4mmap[4].base=16;
-
-  // sprintf(s4mmap[4].desc,"elapsedTime");
-  // sprintf(s4mmap[4].addr,"1E8");
-  // sprintf(s4mmap[4].msize,"D");
-  // s4mmap[4].kpi=&rdKpi.elapsedTime;
-  // s4mmap[4].base=16;
-
-  sprintf(s4mmap[5].desc,"elapsedTimeSec");
-  sprintf(s4mmap[5].addr,"1E1");
-  sprintf(s4mmap[5].msize,"S");
-  s4mmap[5].kpi=&rdKpi.elapsedTimeSec;
-  s4mmap[5].base=10;
-
-  sprintf(s4mmap[6].desc,"elapsedTimeMin");
-  sprintf(s4mmap[6].addr,"1E2");
-  sprintf(s4mmap[6].msize,"S");
-  s4mmap[6].kpi=&rdKpi.elapsedTimeMin;
-  s4mmap[6].base=10;
-
-  sprintf(s4mmap[7].desc,"elapsedTimeHour");
-  sprintf(s4mmap[7].addr,"1E3");
-  sprintf(s4mmap[7].msize,"S");
-  s4mmap[7].kpi=&rdKpi.elapsedTimeHour;
-  s4mmap[7].base=10;
-  
-  if (UsbH.Init())
-    SerialDebug.println("USB host failed to initialize");
-  
-  SerialDebug.println("USB Host init OK"); 
-  initBLE();
-  
-#ifdef USE_FAKE_DATA
-  initFakeBleData();
-#else
-  initBleData();
-#endif
-  
-}
 
 void writeCdcAcm(char str[]){
   UsbH.Task();
@@ -672,7 +751,7 @@ void readCdcAcm(){
   if( AcmSerial.isReady()) {
 
     uint8_t rcode;
-    char buf[64];    
+    char buf[_BUFFSIZE];    
     uint16_t rcvd = sizeof(buf);
     
     rcode = AcmSerial.RcvData(&rcvd, (uint8_t *)buf); 
@@ -776,6 +855,8 @@ void decodeS4Message(char cmd[]){
         
         readCdcAcm();
         s4InitFlag=true;
+        // Init the BLE; 
+        initBLE();
       }
       else if (cmd[1]=='D') { // Incomming data from S4
         if (strlen(cmd)>6){
@@ -816,33 +897,39 @@ void decodeS4Message(char cmd[]){
 
 }
 
-unsigned long currentTime=0;
-unsigned long previousTime=0;
+
 
 void loop(){
-
-UsbH.Task();
+  // Start with Usb Host Task
+  // No Delay expect the one at the end to avoid coredump due to USB R/W Collision
+  // 
+  UsbH.Task(); 
 
 #ifdef DEEPTRACE
   SerialDebug.print("loop() start");
 #endif
-  // <!> Remember delay is Evil !!! 
-  // readCdcAcm is here at the top for a reason 
   
   currentTime=millis();
   
   if (s4InitFlag==false && AcmSerial.isReady() ){
+    SerialDebug.println("Going in");
     if (s4SendUsb==false){
       SerialDebug.print("USB read");
       writeCdcAcm((char*)"USB");
       readCdcAcm(); 
       s4SendUsb=true;
     }
-  }else{
+
+    if ((currentTime-previousTime)>10000 && s4SendUsb==true){ // If After 10 sec no Reset then retry
+      previousTime=currentTime;
+      s4SendUsb=false;
+    }
+
+  }else if(s4InitFlag==true && AcmSerial.isReady()){
     
     if ((currentTime-previousTime)>REFRESH_DATA_TIME){
       previousTime=currentTime;
-      if ( s4InitFlag==true && bleConnectionStatus==true ){ // Get S4 Data Only if BLE is Connected
+      if ( s4InitFlag==true && bleInitFlag==true && bleConnectionStatus==true ){ // Get S4 Data Only if BLE is Connected
 
         char cmd[7];
         sprintf(cmd,"IR%s%s",s4mmap[s4KpiTurn].msize,s4mmap[s4KpiTurn].addr); // One KPI per cycle or SAMD21 will lost message
@@ -856,6 +943,12 @@ UsbH.Task();
       // Send BLE Data 
 
       if (ble.isConnected() && s4InitFlag==true ){ // Start Sending BLE Data only when BLE is connected and when S4 is fully initialized
+        
+        if ((currentTime-battPreviousTime)>60000){ // Every 60 sec send Battery percent to GATT Battery Level Service
+          battPreviousTime=currentTime;
+          sendBleBattery();
+        }
+
         if (bleConnectionStatus==false)
           SerialDebug.println("BLE:Connected");   
         bleConnectionStatus=true;
@@ -874,12 +967,10 @@ UsbH.Task();
         bleConnectionStatus=false;
       }
     }
-  }
-
-  readCdcAcm(); 
-  
-  if (!AcmSerial.isReady()){
+    readCdcAcm();
+  }else if (!AcmSerial.isReady()){
     usbCounterCycle++;
+    //previousTime=currentTime;
     if (usbCounterCycle>10){  // Need 32 Cycle of USB.task to init the USB
       SerialDebug.println("USB Serial is not ready sleep for 1 sec");
       delay(1000);
