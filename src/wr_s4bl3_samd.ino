@@ -23,7 +23,9 @@
 #define _VERSION          0.30
 #define BLE_SERVICE_NAME "WR S4BL3"           // name of the Bluetooth Service 
 #define REFRESH_DATA_TIME 100                 // ms cycle before gathering 
-//#define USE_FAKE_DATA                       // Simulate BLE service
+
+#define USE_FAKE_DATA                         // Simulate BLE service
+
 //#define DEBUG                               // activate verbose debug on SerialDebug port
 //#define DEEPTRACE                           // enable start and end of fucntion to trace any core location
 #define _BUFFSIZE 64                          // Max buffer len to read/write Usb Cdc Acm byte queue
@@ -34,9 +36,9 @@
 #define SerialDebug Serial1                   // Usb is used by S4, additionnal port on SAMD21
       
 #define FitnessMachineService       0x1826
-#define FitnessMachineControlPoint  0x2AD9    // CX Not implemented yet
+#define FitnessMachineControlPoint  0x2AD9    // Beta Implementation
 #define FitnessMachineFeature       0x2ACC    // CX Not implemented yet
-#define FitnessMachineStatus        0x2ADA    // CX Not implemented yet
+#define FitnessMachineStatus        0x2ADA    // Beta Implementation
 #define FitnessMachineRowerData     0x2AD1    // CX Main cx implemented
 
 #define batteryService              0x180F    // Additionnal battery service
@@ -210,8 +212,6 @@ struct s4MemoryMap s4mmap[S4SIZE];
 
 void setup(){
 
-  
-
   SerialDebug.begin(19200);
   delay(25);
 
@@ -293,7 +293,7 @@ void setup(){
     SerialDebug.println("USB host failed to initialize");
   
   SerialDebug.println("USB Host init OK"); 
-  //initBLE(); // Todo: to be removed, Activate for testing to be removed Move after USB Reset
+  initBLE(); // Todo: to be removed, Activate for testing to be removed Move after USB Reset
   
   currentTime=millis();
   previousTime=millis();
@@ -359,6 +359,17 @@ void initBLE(){
     error(F("Could not add Fitness Machine Rower Data characteristic"));
   }
 
+  /* Add the Fitness Machine Control Point characteristic */
+  fitnessMachineControlPointId = gatt.addCharacteristic(FitnessMachineControlPoint, GATT_CHARS_PROPERTIES_READ, 1, 10, BLE_DATATYPE_BYTEARRAY);
+  if (fitnessMachineControlPointId == 0) {
+    error(F("Could not add Fitness Machine Control Point characteristic"));
+  }
+  /* Add the Fitness Machine Status characteristic */
+  fitnessMachineStatusId = gatt.addCharacteristic(FitnessMachineStatus, GATT_CHARS_PROPERTIES_NOTIFY, 1, 10, BLE_DATATYPE_BYTEARRAY);
+  if (fitnessMachineStatusId == 0) {
+    error(F("Could not add Fitness Machine Status characteristic"));
+  }
+  
   SerialDebug.println(F("Adding Fitness Machine Service UUID to the advertising payload "));
   uint8_t advdata[] { 0x02, 0x01, 0x06, 0x05, 0x02, 0x26, 0x18, 0x0a, 0x18 };
   ble.setAdvData( advdata, sizeof(advdata) );
@@ -504,6 +515,76 @@ void initBleData(){
   rdKpi.elapsedTimeMin=0;
   rdKpi.elapsedTimeHour=0;
   rdKpi.remainingTime=0;
+}
+ /*
+  *  Read Cx fitnessMachineControlPointId
+  */
+
+void getBleData(){
+  
+  unsigned char rData[32]; // Read Buffer Reading the specification MAX_SIZE is 1 Opcode & 18 Octets parameter (without potential header)
+  unsigned char wData[32]; // Write Buffer Reading the specification MAX_SIZE is 1 opcode & 17 Octets for parameter
+  int len=0;
+
+  len=gatt.getChar(fitnessMachineControlPointId, rData, 32);
+  if (len>0){
+    // A Message is received from the BLE Client
+
+    // 1 start getting the opcode
+    switch(rData[0]){
+      case 0x00:        // Take Control Request
+        wData[0]=0x80;  // Response opcode 
+        wData[1]=0x01;  // for success
+        gatt.setChar(fitnessMachineControlPointId, wData, 2);
+        break;
+      case 0x01:        // RESET Command Request
+        wData[0]=0x80;  // Response opcode 
+        wData[1]=0x01;  // for success
+        gatt.setChar(fitnessMachineControlPointId, wData, 2);
+        
+        // Send reset command to the WR S4
+        writeCdcAcm((char*)"RESET"); 
+        break;
+      case 0x07:        // Start / Resume Command Request
+        wData[0]=0x80;  // Response opcode 
+        wData[1]=0x01;  // for success
+        gatt.setChar(fitnessMachineControlPointId, wData, 2);
+
+        //Send start/resume command to S4
+
+      case 0x08:        // Stop / Pause Command Request
+        wData[0]=0x80;  // Response opcode 
+        wData[1]=0x01;  // for success
+        gatt.setChar(fitnessMachineControlPointId, wData, 2);
+
+        //Send start/resume command to S4
+      
+      case 0x0C:        // set Target Distance follow by a UINT 24 in meter with a resolution of 1 m
+        // It is also recommended that the rowing computer is RESET prior to downloading any workout, a PING after a reset will indicate the rowing computer is ready again for data.
+        // S4 Command W SI+X+YYYY+0x0D0A
+        
+        long distance= (rData[1] &  0x000000FF) + (rData[2] & 0x0000FF00) >> 8 +  (rData[3] & 0x00FF0000) >> 16;
+        wData[0]=0x80;  // Response opcode 
+        wData[1]=0x01;  // for success
+        gatt.setChar(fitnessMachineControlPointId, wData, 2);
+
+        // Send new workout distance to the S4 
+        // todo add reset
+        break;
+      
+      case 0x0D:        // Set Target time follow by a UINT16 in second with a resolution of 1 sec
+        //It is also recommended that the rowing computer is RESET prior to downloading any workout, a PING after a reset will indicate the rowing computer is ready again for data.
+        // S4 Command W SU + YYYY + 0x0D0A
+        
+        long duration= (rData[1] &  0x000000FF) + (rData[2] & 0x0000FF00) >> 8;
+        wData[0]=0x80;  // Response opcode 
+        wData[1]=0x01;  // for success
+        gatt.setChar(fitnessMachineControlPointId, wData, 2);
+
+    }
+
+  }
+
 }
 
  /*
@@ -910,7 +991,21 @@ void loop(){
 #endif
   
   currentTime=millis();
-  
+  // to be removed
+  if ((currentTime-battPreviousTime)>1000){ // Every 60 sec send Battery percent to GATT Battery Level Service
+    battPreviousTime=currentTime;
+    sendBleBattery();
+    #ifdef USE_FAKE_DATA
+        sendFakeBleDataP1();
+        sendFakeBleDataP2();
+    #else
+        //sendBleData();
+        sendBleLightData();
+    #endif
+  }
+
+
+
   if (s4InitFlag==false && AcmSerial.isReady() ){
     SerialDebug.println("Going in");
     if (s4SendUsb==false){
