@@ -20,7 +20,7 @@
 #include "BluefruitConfig.h"
 
 // Global Define 
-#define _VERSION          0.30
+#define _VERSION          0.39
 #define BLE_SERVICE_NAME "WR S4BL3"           // name of the Bluetooth Service 
 #define REFRESH_DATA_TIME 100                 // ms cycle before gathering 
 
@@ -419,7 +419,7 @@ void initFakeBleData(){
   rdKpi.remainingTime=600;
 }
 
-void sendFakeBleDataP1(){
+void setFakeCxRowerDataP1(){
 
   unsigned char cRower[30];
       
@@ -460,7 +460,7 @@ void sendFakeBleDataP1(){
   
 }
 
-void sendFakeBleDataP2(){
+void setFakeCxRowerDataP2(){
  
   unsigned char cRower[13];
       
@@ -519,38 +519,69 @@ void initBleData(){
  /*
   *  Read Cx fitnessMachineControlPointId
   */
+void setCxFitnessStatus(uint8_t data[],int len){
 
-void getBleData(){
+// OPCODE     DESCRIPTION                                             PARAMETERS
+// 0x01       Reset                                                   N/A
+// 0x02       Fitness Machine Stopped or Paused by the User
+// 0x03       Fitness Machine Stopped by Safety Key                   N/A
+// 0x04       Fitness Machine Started or Resumed by the User          N/A
+// 0x05       Target Speed Changed
+// 0x06       Target Incline Changed
+// 0x07       Target Resistance Level Changed
+// 0x08       Target Power Changed
+// 0x09       Target Heart Rate Changed
+// 0x0B       Targeted Number of Steps Changed                        New Targeted Number of Steps Value (UINT16, in Steps with a resolution of 1)
+// 0x0C       Targeted Number of Strides Changed                      New Targeted Number of Strides (UINT16, in Stride with a resolution of 1)
+// 0x0D       Targeted Distance Changed                               New Targeted Distance (UINT24, in Meters with a resolution of 1)
+// 0x0E       Targeted Training Time Changed                          New Targeted Training Time (UINT16, in Seconds with a resolution of 1)
+
+  gatt.setChar(fitnessMachineStatusId,data,len);
+
+}
+
+void getCxFitnessControlPoint(){
   
   unsigned char rData[32]; // Read Buffer Reading the specification MAX_SIZE is 1 Opcode & 18 Octets parameter (without potential header)
   unsigned char wData[32]; // Write Buffer Reading the specification MAX_SIZE is 1 opcode & 17 Octets for parameter
   int len=0;
+  
+  unsigned char statusData[32];
+  char s4buffer[32];
 
   len=gatt.getChar(fitnessMachineControlPointId, rData, 32);
   if (len>0){
     // A Message is received from the BLE Client
-
     // 1 start getting the opcode
+
     switch(rData[0]){
+      
       case 0x00:        // Take Control Request
         wData[0]=0x80;  // Response opcode 
         wData[1]=0x01;  // for success
         gatt.setChar(fitnessMachineControlPointId, wData, 2);
         break;
+
       case 0x01:        // RESET Command Request
         wData[0]=0x80;  // Response opcode 
         wData[1]=0x01;  // for success
         gatt.setChar(fitnessMachineControlPointId, wData, 2);
         
         // Send reset command to the WR S4
-        writeCdcAcm((char*)"RESET"); 
+        writeCdcAcm((char*)"RESET");
+
+        statusData[0]=0x01;
+        setCxFitnessStatus(statusData,1);
+
         break;
+
       case 0x07:        // Start / Resume Command Request
         wData[0]=0x80;  // Response opcode 
         wData[1]=0x01;  // for success
         gatt.setChar(fitnessMachineControlPointId, wData, 2);
 
         //Send start/resume command to S4
+        break;
 
       case 0x08:        // Stop / Pause Command Request
         wData[0]=0x80;  // Response opcode 
@@ -558,28 +589,56 @@ void getBleData(){
         gatt.setChar(fitnessMachineControlPointId, wData, 2);
 
         //Send start/resume command to S4
-      
-      case 0x0C:        // set Target Distance follow by a UINT 24 in meter with a resolution of 1 m
+        break;
+
+      case 0x0C:{        
+        
+        // set Target Distance follow by a UINT 24 in meter with a resolution of 1 m
         // It is also recommended that the rowing computer is RESET prior to downloading any workout, a PING after a reset will indicate the rowing computer is ready again for data.
         // S4 Command W SI+X+YYYY+0x0D0A
         
-        long distance= (rData[1] &  0x000000FF) + (rData[2] & 0x0000FF00) >> 8 +  (rData[3] & 0x00FF0000) >> 16;
+        long distance= (rData[1] &  0x000000FF) + ((rData[2] & 0x0000FF00) >> 8) +  ((rData[3] & 0x00FF0000) >> 16); // to be checked
+        wData[0]=0x80;  // Response opcode 
+        wData[1]=0x01;  // for success
+        gatt.setChar(fitnessMachineControlPointId, wData, 2);
+        
+        writeCdcAcm((char*)"RESET");
+
+        sprintf(s4buffer,"WSI1%04X",distance);
+        
+        writeCdcAcm((char*)s4buffer);
+
+        statusData[0]=0x0D;
+        statusData[1]=rData[1];
+        statusData[2]=rData[2];
+        statusData[3]=rData[3];
+
+        setCxFitnessStatus(statusData,4);
+        // Send new workout distance to the S4 
+        // todo add reset
+        break;
+      }
+
+      case 0x0D:{    
+        // Set Target time follow by a UINT16 in second with a resolution of 1 sec
+        //It is also recommended that the rowing computer is RESET prior to downloading any workout, a PING after a reset will indicate the rowing computer is ready again for data.
+        // S4 Command W SU + YYYY + 0x0D0A
+        
+        long duration= (rData[1] &  0x000000FF) + ((rData[2] & 0x0000FF00) >> 8);
         wData[0]=0x80;  // Response opcode 
         wData[1]=0x01;  // for success
         gatt.setChar(fitnessMachineControlPointId, wData, 2);
 
-        // Send new workout distance to the S4 
-        // todo add reset
-        break;
-      
-      case 0x0D:        // Set Target time follow by a UINT16 in second with a resolution of 1 sec
-        //It is also recommended that the rowing computer is RESET prior to downloading any workout, a PING after a reset will indicate the rowing computer is ready again for data.
-        // S4 Command W SU + YYYY + 0x0D0A
+        writeCdcAcm((char*)"RESET");
+
+        sprintf(s4buffer,"WSU1%04X",duration);
         
-        long duration= (rData[1] &  0x000000FF) + (rData[2] & 0x0000FF00) >> 8;
-        wData[0]=0x80;  // Response opcode 
-        wData[1]=0x01;  // for success
-        gatt.setChar(fitnessMachineControlPointId, wData, 2);
+        writeCdcAcm((char*)s4buffer);
+
+        break;
+      }
+      default:
+        break;
 
     }
 
@@ -592,7 +651,7 @@ void getBleData(){
   * This may help to better understand how it is built
   */
 
-void sendBleLightData(){
+void setCxLightRowerData(){
 
 #ifdef DEEPTRACE
   SerialDebug.printf("sendBleLightData() start");
@@ -674,7 +733,7 @@ void sendBleLightData(){
  * todo This has still to be tested
  */
 
-void sendBleBattery(){
+void setCxBattery(){
 
 #ifdef DEEPTRACE
   SerialDebug.printf("sendBleBattery() start");
@@ -684,7 +743,6 @@ float measuredVbat = analogRead(VBATPIN);
 measuredVbat *= 2;    // we divided by 2, so multiply back
 measuredVbat *= 3.3;  // Multiply by 3.3V, our reference voltage
 measuredVbat /= 1024; // convert to voltage
-
 
 int batteryLevelPercent=((measuredVbat-2.9)/(5.15-2.90))*100;
 
@@ -706,7 +764,7 @@ gatt.setChar(batteryLevelId, hexBat, 1);
  *  Full Message sentd in 2 part
  */
 
-void sendBleData(){
+void setCxRowerData(){
   // Due the size limitation of the message in the BLE Stack of the NRF
   // the message will be split in 2 parts with the according Bitfield (read the spec :) )
   
@@ -994,13 +1052,15 @@ void loop(){
   // to be removed
   if ((currentTime-battPreviousTime)>1000){ // Every 60 sec send Battery percent to GATT Battery Level Service
     battPreviousTime=currentTime;
-    sendBleBattery();
+    setCxBattery();
+    getCxFitnessControlPoint();
     #ifdef USE_FAKE_DATA
-        sendFakeBleDataP1();
-        sendFakeBleDataP2();
+        setFakeCxRowerDataP1();
+        setFakeCxRowerDataP2();
     #else
-        //sendBleData();
-        sendBleLightData();
+        //setCxRowerData();
+        setCxLightRowerData();
+    
     #endif
   }
 
@@ -1041,7 +1101,7 @@ void loop(){
         
         if ((currentTime-battPreviousTime)>60000){ // Every 60 sec send Battery percent to GATT Battery Level Service
           battPreviousTime=currentTime;
-          sendBleBattery();
+          setCxBattery();
         }
 
         if (bleConnectionStatus==false)
@@ -1049,11 +1109,11 @@ void loop(){
         bleConnectionStatus=true;
         
 #ifdef USE_FAKE_DATA
-        sendFakeBleDataP1();
-        sendFakeBleDataP2();
+        setFakeCxRowerDataP1();
+        setFakeCxRowerDataP2();
 #else
-        //sendBleData();
-        sendBleLightData();
+        //setCxRowerData();
+        setCxLightRowerData();
 #endif
 
       }else{
