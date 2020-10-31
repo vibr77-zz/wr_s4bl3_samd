@@ -24,10 +24,6 @@
 #define BLE_SERVICE_NAME "WR S4BL3"           // name of the Bluetooth Service 
 #define REFRESH_DATA_TIME 100                 // ms cycle before gathering 
 //#define USE_FAKE_DATA                       // Simulate BLE service
-<<<<<<< HEAD
-//#define TEST                                // Enable BLE without S4 init by RESET
-=======
->>>>>>> origin/main
 //#define DEBUG                               // activate verbose debug on SerialDebug port
 //#define DEEPTRACE                           // enable start and end of fucntion to trace any core location
 #define _BUFFSIZE 64                          // Max buffer len to read/write Usb Cdc Acm byte queue
@@ -44,11 +40,7 @@
 #define FitnessMachineRowerData     0x2AD1    // CX Main cx implemented
 
 #define batteryService              0x180F    // Additionnal battery service
-<<<<<<< HEAD
-#define batteryLevel                0x2A19    // Additionnal cx to battery service, Only 1 Byte in HEX, 1 < DEC < 100
-=======
 #define batteryLevel                0x2A19    // Additionnal cx to battery service
->>>>>>> origin/main
 
 class ACMAsyncOper : public CDCAsyncOper{
   public:
@@ -65,11 +57,11 @@ uint8_t ACMAsyncOper::OnInit(ACM *pacm){
     return rcode;  
   }
 
-  LINE_CODING	lc;
-  lc.dwDTERate	= _S4_PORT_SPEED;
-  lc.bCharFormat	= 0;
-  lc.bParityType	= 0;
-  lc.bDataBits	= 8;
+  LINE_CODING lc;
+  lc.dwDTERate  = _S4_PORT_SPEED;
+  lc.bCharFormat  = 0;
+  lc.bParityType  = 0;
+  lc.bDataBits  = 8;
 
   rcode = pacm->SetLineCoding(&lc);
 
@@ -104,10 +96,7 @@ Adafruit_BluefruitLE_SPI ble(BLUEFRUIT_SPI_CS, BLUEFRUIT_SPI_IRQ, BLUEFRUIT_SPI_
 //                             BLUEFRUIT_SPI_MOSI, BLUEFRUIT_SPI_CS,
 //                             BLUEFRUIT_SPI_IRQ, BLUEFRUIT_SPI_RST);
 
-<<<<<<< HEAD
-=======
 
->>>>>>> origin/main
 Adafruit_BLEGatt gatt(ble);
 
 // A small helper
@@ -221,11 +210,8 @@ struct s4MemoryMap s4mmap[S4SIZE];
 
 void setup(){
 
-<<<<<<< HEAD
-=======
   
 
->>>>>>> origin/main
   SerialDebug.begin(19200);
   delay(25);
 
@@ -307,15 +293,8 @@ void setup(){
     SerialDebug.println("USB host failed to initialize");
   
   SerialDebug.println("USB Host init OK"); 
-<<<<<<< HEAD
-
-#ifdef TEST
-  initBLE(); // Todo: to be removed, Activate for testing to be removed Move after USB Reset
-#endif  
-=======
   //initBLE(); // Todo: to be removed, Activate for testing to be removed Move after USB Reset
   
->>>>>>> origin/main
   currentTime=millis();
   previousTime=millis();
   
@@ -860,10 +839,7 @@ void decodeS4Message(char cmd[]){
     
       if (!strcmp(cmd,"_WR_")){
         writeCdcAcm((char*)"IV?");
-<<<<<<< HEAD
-=======
         //readCdcAcm();
->>>>>>> origin/main
       }
       break;
     case 'E':
@@ -921,19 +897,12 @@ void decodeS4Message(char cmd[]){
 
 }
 
-<<<<<<< HEAD
-void loop(){
-  // Start with Usb Host Task
-  // No Delay expect the one at the end to avoid coredump due to USB R/W Collision
-
-=======
 
 
 void loop(){
   // Start with Usb Host Task
   // No Delay expect the one at the end to avoid coredump due to USB R/W Collision
   // 
->>>>>>> origin/main
   UsbH.Task(); 
 
 #ifdef DEEPTRACE
@@ -960,10 +929,6 @@ void loop(){
     
     if ((currentTime-previousTime)>REFRESH_DATA_TIME){
       previousTime=currentTime;
-<<<<<<< HEAD
-      
-=======
->>>>>>> origin/main
       if ( s4InitFlag==true && bleInitFlag==true && bleConnectionStatus==true ){ // Get S4 Data Only if BLE is Connected
 
         char cmd[7];
@@ -975,13 +940,7 @@ void loop(){
         s4KpiTurn=0; 
       }
       
-<<<<<<< HEAD
-      // 
       // Send BLE Data 
-      //
-=======
-      // Send BLE Data 
->>>>>>> origin/main
 
       if (ble.isConnected() && s4InitFlag==true ){ // Start Sending BLE Data only when BLE is connected and when S4 is fully initialized
         
@@ -1021,9 +980,5 @@ void loop(){
 #ifdef DEEPTRACE
   SerialDebug.println("loop() end");
 #endif
-<<<<<<< HEAD
-  delay(5); // This avoid coredump mesured by JTAG, Period of S4 is 5 ms ;)
-=======
 delay(5); // This avoid coredump mesured by JTAG, Period of S4 is 5 ms ;)
->>>>>>> origin/main
 }
