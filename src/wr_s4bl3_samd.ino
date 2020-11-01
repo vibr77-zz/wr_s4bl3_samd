@@ -360,7 +360,7 @@ void initBLE(){
   }
 
   /* Add the Fitness Machine Control Point characteristic */
-  fitnessMachineControlPointId = gatt.addCharacteristic(FitnessMachineControlPoint, GATT_CHARS_PROPERTIES_READ, 1, 10, BLE_DATATYPE_BYTEARRAY);
+  fitnessMachineControlPointId = gatt.addCharacteristic(FitnessMachineControlPoint, GATT_CHARS_PROPERTIES_WRITE, 1, 10, BLE_DATATYPE_BYTEARRAY);
   if (fitnessMachineControlPointId == 0) {
     error(F("Could not add Fitness Machine Control Point characteristic"));
   }
@@ -548,11 +548,23 @@ void getCxFitnessControlPoint(){
   
   unsigned char statusData[32];
   char s4buffer[32];
+  char tmp[32];
 
   len=gatt.getChar(fitnessMachineControlPointId, rData, 32);
   if (len>0){
     // A Message is received from the BLE Client
     // 1 start getting the opcode
+    
+    
+    if (rData[0]!=0x80){
+      SerialDebug.print("getCxFitnessControlPoint() Data:");
+      for (int i=0;i<len;i++){
+        sprintf(tmp,"0x%02X;",rData[i]);
+        SerialDebug.print(tmp);
+      }
+      SerialDebug.print("len:");
+      SerialDebug.println(len);
+    }
 
     switch(rData[0]){
       
@@ -597,15 +609,19 @@ void getCxFitnessControlPoint(){
         // It is also recommended that the rowing computer is RESET prior to downloading any workout, a PING after a reset will indicate the rowing computer is ready again for data.
         // S4 Command W SI+X+YYYY+0x0D0A
         
-        long distance= (rData[1] &  0x000000FF) + ((rData[2] & 0x0000FF00) >> 8) +  ((rData[3] & 0x00FF0000) >> 16); // to be checked
+        long distance= (rData[1] &  0x000000FF) + ((rData[2] << 8 ) & 0x0000FF00)  +  ((rData[3] << 16) & 0x00FF0000); // LSO..MO (Inversed)
+        SerialDebug.print("distance:");
+        SerialDebug.println(distance);
+
         wData[0]=0x80;  // Response opcode 
         wData[1]=0x01;  // for success
         gatt.setChar(fitnessMachineControlPointId, wData, 2);
         
         writeCdcAcm((char*)"RESET");
 
+        // Assuming the coding is MSO..LSO (Normal)
         sprintf(s4buffer,"WSI1%04X",distance);
-        
+        SerialDebug.println(s4buffer);
         writeCdcAcm((char*)s4buffer);
 
         statusData[0]=0x0D;
@@ -624,15 +640,17 @@ void getCxFitnessControlPoint(){
         //It is also recommended that the rowing computer is RESET prior to downloading any workout, a PING after a reset will indicate the rowing computer is ready again for data.
         // S4 Command W SU + YYYY + 0x0D0A
         
-        long duration= (rData[1] &  0x000000FF) + ((rData[2] & 0x0000FF00) >> 8);
+        long duration= (rData[1] &  0x000000FF) + ((rData[2] << 8 ) & 0x0000FF00);  // LSO..MO (Inversed)
+        
         wData[0]=0x80;  // Response opcode 
         wData[1]=0x01;  // for success
         gatt.setChar(fitnessMachineControlPointId, wData, 2);
 
         writeCdcAcm((char*)"RESET");
-
-        sprintf(s4buffer,"WSU1%04X",duration);
         
+        // Assuming the coding is MSO..LSO (Normal)
+        sprintf(s4buffer,"WSU%04X",duration);
+        SerialDebug.println(s4buffer);
         writeCdcAcm((char*)s4buffer);
 
         break;
@@ -1052,7 +1070,7 @@ void loop(){
   // to be removed
   if ((currentTime-battPreviousTime)>1000){ // Every 60 sec send Battery percent to GATT Battery Level Service
     battPreviousTime=currentTime;
-    setCxBattery();
+    //setCxBattery();
     getCxFitnessControlPoint();
     #ifdef USE_FAKE_DATA
         setFakeCxRowerDataP1();
@@ -1127,7 +1145,7 @@ void loop(){
     usbCounterCycle++;
     //previousTime=currentTime;
     if (usbCounterCycle>10){  // Need 32 Cycle of USB.task to init the USB
-      SerialDebug.println("USB Serial is not ready sleep for 1 sec");
+      //SerialDebug.println("USB Serial is not ready sleep for 1 sec");
       delay(1000);
       usbCounterCycle=0;
     }
