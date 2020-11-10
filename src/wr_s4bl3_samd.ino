@@ -481,7 +481,7 @@ void setFakeCxRowerDataP2(){
   cRower[8] = rdKpi.metabolicEquivalent& 0x000000FF;
 
   rdKpi.elapsedTime++;
-  cRower[9] = rdKpi.elapsedTime & 0x000000FF;
+  cRower[9] =   rdKpi.elapsedTime & 0x000000FF;
   cRower[10] = (rdKpi.elapsedTime & 0x0000FF00) >> 8;
 
   rdKpi.remainingTime--;
@@ -580,7 +580,8 @@ void getCxFitnessControlPoint(){
         gatt.setChar(fitnessMachineControlPointId, wData, 2);
         
         // Send reset command to the WR S4
-        writeCdcAcm((char*)"RESET");
+        //writeCdcAcm((char*)"RESET");
+        setReset();
 
         statusData[0]=0x01;
         setCxFitnessStatus(statusData,1);
@@ -617,7 +618,9 @@ void getCxFitnessControlPoint(){
         wData[1]=0x01;  // for success
         gatt.setChar(fitnessMachineControlPointId, wData, 2);
         
-        writeCdcAcm((char*)"RESET");
+        //writeCdcAcm((char*)"RESET");
+        // TODO Check the need of Reset at this stage
+        setReset();
 
         // Assuming the coding is MSO..LSO (Normal)
         sprintf(s4buffer,"WSI1%04X",distance);
@@ -646,7 +649,9 @@ void getCxFitnessControlPoint(){
         wData[1]=0x01;  // for success
         gatt.setChar(fitnessMachineControlPointId, wData, 2);
 
-        writeCdcAcm((char*)"RESET");
+         //writeCdcAcm((char*)"RESET");
+         // TODO Check the need of Reset at this stage
+         setReset();
         
         // Assuming the coding is MSO..LSO (Normal)
         sprintf(s4buffer,"WSU%04X",duration);
@@ -838,7 +843,7 @@ void setCxRowerData(){
   cRower[8] = rdKpi.metabolicEquivalent& 0x000000FF;
 
   rdKpi.elapsedTime=rdKpi.elapsedTimeSec+rdKpi.elapsedTimeMin*60+rdKpi.elapsedTimeHour*3600;
-  cRower[9] = rdKpi.elapsedTime & 0x000000FF;
+  cRower[9] =   rdKpi.elapsedTime & 0x000000FF;
   cRower[10] = (rdKpi.elapsedTime & 0x0000FF00) >> 8;
 
   cRower[11] = rdKpi.remainingTime & 0x000000FF;
@@ -848,7 +853,15 @@ void setCxRowerData(){
 
 }
 
+void setReset(){
+  // This function will send a Reset Command to S4
+  // and also initBLEData
 
+  // TODO : To be tested
+
+  writeCdcAcm((char*)"RESET"); 
+  initBleData();
+}
 
 void writeCdcAcm(char str[]){
   UsbH.Task();
@@ -1008,8 +1021,8 @@ void decodeS4Message(char cmd[]){
         if (!strcmp(cmd,"IV40210")){ // 
           SerialDebug.println("S4 Good Firmware Version");
         }
-        writeCdcAcm((char*)"RESET");         // You should here a Bip on the WaterRower
-        
+        //writeCdcAcm((char*)"RESET");         // You should here a Bip on the WaterRower
+        setReset()
         readCdcAcm();
         s4InitFlag=true;
         // Init the BLE; 
@@ -1067,10 +1080,10 @@ void loop(){
 #endif
   
   currentTime=millis();
-  // to be removed
-  if ((currentTime-battPreviousTime)>1000){ // Every 60 sec send Battery percent to GATT Battery Level Service
+  // TODO FOR TEST ONLY to be removed
+  if ((currentTime-battPreviousTime)>100){ // Every 60 sec send Battery percent to GATT Battery Level Service
     battPreviousTime=currentTime;
-    //setCxBattery();
+    setCxBattery();
     getCxFitnessControlPoint();
     #ifdef USE_FAKE_DATA
         setFakeCxRowerDataP1();
@@ -1146,7 +1159,7 @@ void loop(){
     //previousTime=currentTime;
     if (usbCounterCycle>10){  // Need 32 Cycle of USB.task to init the USB
       //SerialDebug.println("USB Serial is not ready sleep for 1 sec");
-      delay(1000);
+      delay(100);
       usbCounterCycle=0;
     }
   }
