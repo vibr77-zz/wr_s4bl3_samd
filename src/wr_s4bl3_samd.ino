@@ -20,11 +20,11 @@
 #include "BluefruitConfig.h"
 
 // Global Define 
-#define _VERSION          0.39
+#define _VERSION          0.40
 #define BLE_SERVICE_NAME "WR S4BL3"           // name of the Bluetooth Service 
 #define REFRESH_DATA_TIME 100                 // ms cycle before gathering 
 
-#define USE_FAKE_DATA                         // Simulate BLE service
+//#define USE_FAKE_DATA                         // Simulate BLE service
 
 //#define DEBUG                               // activate verbose debug on SerialDebug port
 //#define DEEPTRACE                           // enable start and end of fucntion to trace any core location
@@ -1022,7 +1022,8 @@ void decodeS4Message(char cmd[]){
           SerialDebug.println("S4 Good Firmware Version");
         }
         //writeCdcAcm((char*)"RESET");         // You should here a Bip on the WaterRower
-        setReset()
+        setReset();
+        
         readCdcAcm();
         s4InitFlag=true;
         // Init the BLE; 
@@ -1081,6 +1082,7 @@ void loop(){
   
   currentTime=millis();
   // TODO FOR TEST ONLY to be removed
+ /*
   if ((currentTime-battPreviousTime)>100){ // Every 60 sec send Battery percent to GATT Battery Level Service
     battPreviousTime=currentTime;
     setCxBattery();
@@ -1089,12 +1091,12 @@ void loop(){
         setFakeCxRowerDataP1();
         setFakeCxRowerDataP2();
     #else
-        //setCxRowerData();
+        
         setCxLightRowerData();
     
     #endif
   }
-
+*/
 
 
   if (s4InitFlag==false && AcmSerial.isReady() ){
